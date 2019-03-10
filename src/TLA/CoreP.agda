@@ -7,7 +7,7 @@ import Relation.Binary.PropositionalEquality as P
 open import Data.Fin using (Fin ; toℕ ; inject≤)
 open import Data.Fin.Properties using (toℕ-inject≤)
 open import Data.Nat using (ℕ ; _+_ ; zero ; suc ; _≤_ ; _⊔_ ; _≤″_ ; _<_ ; s≤s)
-open import Data.Nat.Properties using (m≤m⊔n ; n≤m⊔n ; ≤⇒≤″ ; +-comm ; +-assoc ; n≤m+n ; ≤-trans ; +-suc)
+open import Data.Nat.Properties using (m≤m⊔n ; n≤m⊔n ; ≤⇒≤″ ; +-comm ; +-assoc ; n≤m+n ; ≤-trans ; +-suc ; n≤1+n)
 open import Data.Product
 open import LTL.Core
 open import LTL.Stateless hiding (_⇒_)
@@ -157,7 +157,7 @@ module _ {ℓ} where
     h1 (impl , pimpl) = (h11 , h12) , impl where
       h11 : (Cl PA ⟶ Cl PB) a
       h11 (sq , sq∈PA , lm)
-        = proj₁ nsq , proj₂ nsq , h115 where
+        = nsq , nsq∈PB , h115 where
         h111 = lemma-12 a sq lm
         f = proj₁ h111
         rl = proj₁ (proj₂ h111)
@@ -165,13 +165,60 @@ module _ {ℓ} where
         eq = proj₂ (proj₂ h111)
         h112 = lemma-10 a sq lm f rl
         h113 = λ m → pimpl ((sbsq m) , (sq∈PA (f m)) , eq m) 
-        nsq : Σ (Seq A) λ sq → sq s∈ PB 
-        nsq = (λ m → proj₁ (h113 m)) , λ m → (proj₁ (proj₂ (h113 m)))
-        h114 = lemma-9 sbsq (proj₁ nsq) λ k fn → P.trans (eq k fn) (P.sym (proj₂ (proj₂ (h113 k)) fn))
-        h115 = lemma-8 a {sbsq} {proj₁ nsq} h112 h114
+        nsq : Seq A
+        nsq m = proj₁ (h113 m)
+        nsq∈PB : nsq s∈ PB
+        nsq∈PB m = proj₁ (proj₂ (h113 m))
+        nsqeq : (m : ℕ) → [ prefix (nsq m) m ≡ᶠ prefix a m ]∥
+        nsqeq m = proj₂ (proj₂ (h113 m))
+        h114 = lemma-9 sbsq nsq λ k fn → P.trans (eq k fn) (P.sym (nsqeq k fn))
+        h115 = lemma-8 a {sbsq} {nsq} h112 h114
       h12 : (∀{m} → (prefix a m) ∈ᶠ (Cl PA) → (prefix a m) ∈ᶠ (Cl PB))
       h12 {m} a∈ClPA = lemma-14 PB a h122 where
         h121 = lemma-4 {P = PA} a∈ClPA
         h122 = pimpl h121
     h2 : (((Cl PA -▹ Cl PB) & (PA ⟶ PB)) ⟶ (PA -▹ PB)) a
     h2 ((cimpl , pimpl) , impl) = impl , (λ x → lemma-4 (pimpl (lemma-14 PA a x)))
+
+
+
+-- -▹⁺
+
+-- TODO The proof is identical with lemma-3 . Maybe generalize both into one.
+  lemma-15 : ∀{A} → {PA PB : Property {ℓ} A} → Tautology ((PA -▹⁺ PB) ≣ ((Cl PA -▹⁺ Cl PB) & (PA ⟶ PB)))
+  lemma-15 {A} {PA} {PB} a = h1 , h2 where
+    h1 : ((PA -▹⁺ PB) ⟶ ((Cl PA -▹⁺ Cl PB) & (PA ⟶ PB))) a
+    h1 (impl , pimpl) = (h11 , h12) , impl where
+      h11 : (Cl PA ⟶ Cl PB) a
+      h11 (sq , sq∈PA , lm)
+        = nsq , nsq∈PB , h115 where
+        h111 = lemma-12 a sq lm
+        f = proj₁ h111
+        rl = proj₁ (proj₂ h111)
+        sbsq = subSeq sq f rl
+        eq = proj₂ (proj₂ h111)
+        h112 = lemma-10 a sq lm f rl
+        h113 = λ m → pimpl ((sbsq m) , (sq∈PA (f m)) , eq m) 
+        nsq : Seq A
+        nsq m = proj₁ (h113 m)
+        nsq∈PB : nsq s∈ PB
+        nsq∈PB m = proj₁ (proj₂ (h113 m))
+        nsqeq : (m : ℕ) → [ prefix (nsq m) m ≡ᶠ prefix a m ]∥
+        nsqeq m = lemma-6 (nsq m) a (n≤1+n m) (proj₂ (proj₂ (h113 m)))
+        h114 = lemma-9 sbsq nsq λ k fn → P.trans (eq k fn) (P.sym (nsqeq k fn))
+        h115 = lemma-8 a {sbsq} {nsq} h112 h114
+      h12 : (∀{m} → (prefix a m) ∈ᶠ (Cl PA) → (prefix a (suc m)) ∈ᶠ (Cl PB))
+      h12 {m} a∈ClPA = lemma-14 PB a h122 where
+        h121 = lemma-4 {P = PA} a∈ClPA
+        h122 = pimpl h121
+    h2 : (((Cl PA -▹⁺ Cl PB) & (PA ⟶ PB)) ⟶ (PA -▹⁺ PB)) a
+    h2 ((cimpl , pimpl) , impl) = impl , (λ x → lemma-4 (pimpl (lemma-14 PA a x)))
+
+
+
+  lemma-16 : ∀{A} → {PA PB : Property {ℓ} A} → Tautology ((Cl PA -▹⁺ PB) ≣ ((PB -▹ Cl PA) -▹ PB))
+  lemma-16 {A} {PA} {PB} a = {!!} where
+    h1 : ((Cl PA -▹⁺ PB) ⟶ ((PB -▹ Cl PA) -▹ PB)) a
+    h1 = {!!}
+    h2 : (((PB -▹ Cl PA) -▹ PB) ⟶ (Cl PA -▹⁺ PB)) a
+    h2 = {!!}

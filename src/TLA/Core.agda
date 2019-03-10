@@ -115,3 +115,9 @@ module _ {ℓ} where
   _-▹_ : ∀{A} → Property {ℓ} A → Property A → Property A
   (PA -▹ PB) = (PA ⟶ PB) & (PA ⟶ᶠ PB)  
 
+
+  _⟶ᶠ⁺_ : ∀{A} → Property {ℓ} A → Property A → Property A
+  (PA ⟶ᶠ⁺ PB) a = (∀{m} → (prefix a m) ∈ᶠ PA → (prefix a (1 + m)) ∈ᶠ PB)
+
+  _-▹⁺_ : ∀{A} → Property {ℓ} A → Property A → Property A
+  PA -▹⁺ PB =  (PA ⟶ PB) & (PA ⟶ᶠ⁺ PB)  
