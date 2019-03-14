@@ -14,6 +14,9 @@ module _ {ℓ} where
   Property : (A : Set ℓ) → Set (lsuc ℓ)
   Property A = (a : A ʷ) → Set ℓ
 
+  P¬∅ : {A : Set ℓ} → Property A → Set ℓ
+  P¬∅ P = ∃ λ s → P s
+
   Tautology : ∀{A} → Property A → Set ℓ
   Tautology P = ∀ a → P a 
 
@@ -47,16 +50,14 @@ module _ {ℓ} where
   prefix : {A : Set ℓ} → (a : A ʷ) → (m : ℕ) → A ʷ∥ m
   prefix beh m fn = beh (toℕ fn)
 
-
   _∈ᶠ_ : ∀{m} → {A : Set ℓ} → (a : A ʷ∥ m) → Property A → Set ℓ
   a ∈ᶠ P = ∃ λ s → s ∈ P × [ prefix s _ ≡ᶠ a ]∥
-
 
 -- Equality
   _≡_ : {Behₛ : (Set ℓ) ʷ } → (a b : [ Behₛ ]) → (Set ℓ) ʷ
   _≡_ a b n = a n P.≡ b n
 
-
+-- Sequences of Sequences
 
   Seq : (A : Set ℓ) → Set ℓ
   Seq A = (m : ℕ) → A ʷ
@@ -68,22 +69,35 @@ module _ {ℓ} where
   (s s∈ P)= ∀ k → P (s k)
 
   Seqᶠ : (A : Set ℓ) → ℕ → Set ℓ
-  Seqᶠ A m = (n : ℕ) → A ʷ∥ m    
+  Seqᶠ A m = (n : ℕ) → A ʷ∥ m
 
--- ?
+  _s∈ᶠ_ : ∀{A m} → Seqᶠ A m → (P : Property A) → Set ℓ
+  (s s∈ᶠ P)= ∀ k → (s k) ∈ᶠ P
+
   Seqᶠⁱ : (A : Set ℓ) → Set ℓ
   Seqᶠⁱ A = (n : ℕ) → A ʷ∥ n    
+
+  _s∈ᶠⁱ_ : {A : Set ℓ} → (s : Seqᶠⁱ A) → Property A → Set ℓ
+  s s∈ᶠⁱ P = (m : ℕ) → s m ∈ᶠ P
+
+  _toSeqᶠⁱ : {A : Set ℓ} → A ʷ → Seqᶠⁱ A
+  (a toSeqᶠⁱ) m = prefix a m
+
+  _stoSeqᶠⁱ : {A : Set ℓ} → Seq A  → Seqᶠⁱ A
+  (s stoSeqᶠⁱ) m = prefix (s m) m
 
   Limit : {A : Set ℓ} → (lm : A ʷ) → (seq : Seq A) → Set ℓ
   Limit lm seq = ∀ m → ∃ (λ n → ∀ k → [ (prefix (seq (k + n)) m) ≡ᶠ (prefix lm m) ]∥)
 
+  Limitᶠⁱ : {A : Set ℓ} → (lm : A ʷ) → (seq : Seqᶠⁱ A) → Set ℓ
+  Limitᶠⁱ lm seq = ∀ m → [ seq m ≡ᶠ (prefix lm m) ]∥
 
   LimitSq : {A : Set ℓ} → (seqa seqb : Seq A ) → Set ℓ
   LimitSq seqa seqb = ∀ m → ∃ (λ n → ∀ k → [ (prefix (seqa (k + n)) m) ≡ᶠ (prefix (seqb (k + n)) m) ]∥)
 
--- ?
   LimitSqᶠⁱ : {A : Set ℓ} → (seqa seqb : Seqᶠⁱ A ) → Set ℓ
   LimitSqᶠⁱ seqa seqb = ∀ m → [ seqa m ≡ᶠ seqb m ]∥
+
 
   Cl : ∀{A} → Property A → Property A
   Cl P s = ∃ λ seq → (seq s∈ P) × Limit s seq
