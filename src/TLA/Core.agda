@@ -17,8 +17,9 @@ module _ {ℓ} where
   P¬∅ : {A : Set ℓ} → Property A → Set ℓ
   P¬∅ P = ∃ λ s → P s
 
-  Tautology : ∀{A} → Property A → Set ℓ
-  Tautology P = ∀ a → P a 
+
+  ⊨ : ∀{A} → Property A → Set ℓ
+  ⊨ P = ∀ a → P a 
 
 
 -- syntactic sugar.

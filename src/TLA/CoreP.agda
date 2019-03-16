@@ -49,6 +49,11 @@ module _ {ℓ} where
     = (proj₁ pa∈ᶠP) , ((proj₁ (proj₂ pa∈ᶠP))
                       , λ fn → P.trans (proj₂ (proj₂ pa∈ᶠP) fn) (eq fn))
 
+-- _≡ᶠ_
+
+  symᶠ : ∀{m} → {C : Set ℓ} → {a b : C ʷ∥ m} → [ a ≡ᶠ b ]∥ → [ b ≡ᶠ a ]∥
+  symᶠ x fn = P.sym (x fn)
+
 -- LIMITS
 
 -- The constant seqeuence of an element "a" converges to "a".
@@ -150,10 +155,10 @@ module _ {ℓ} where
     
 -- Closures
 
-  lemma-11 : {A : Set ℓ} → (P : Property A) → Tautology (P ⟶ Cl P)
+  lemma-11 : {A : Set ℓ} → (P : Property A) → ⊨ (P ⟶ Cl P)
   lemma-11 P a a∈P = ⟨ a ⟩ , ⟨ a∈P ⟩ , lemma-4 a
 
-  lemma-12 : {A : Set ℓ} → (P : Property A) → Tautology (P ⟶ᶠ Cl P)
+  lemma-12 : {A : Set ℓ} → (P : Property A) → ⊨ (P ⟶ᶠ Cl P)
   lemma-12 P a (sa , sa∈P , eq) = sa , (lemma-11 P sa sa∈P) , eq
   
   lemma-13 : ∀{A} → {P : Property {ℓ} A} → (a : A ʷ) → a ∈ Cl P → ∀ m → prefix a m ∈ᶠ P
@@ -178,7 +183,7 @@ module _ {ℓ} where
 
 -- ⟶ᶠ
 
-  lemma-15 : ∀{A} → {PA PB : Property {ℓ} A} → Tautology ((Cl PA ⟶ᶠ Cl PB) ⟶ (Cl PA ⟶ Cl PB))
+  lemma-15 : ∀{A} → {PA PB : Property {ℓ} A} → ⊨ ((Cl PA ⟶ᶠ Cl PB) ⟶ (Cl PA ⟶ Cl PB))
   lemma-15 {_} {PA} {PB} a pimpl (sq , sq∈PA , lm) = h4  where
     h1 = lemma-10 a sq lm
     f  = proj₁ h1
@@ -194,10 +199,15 @@ module _ {ℓ} where
     h3 _ = neq _
     h4 = lemma-19 a (nsq stoSeqᶠⁱ) h3 nsqs∈ᶠⁱPB
 
+-- ⟶ᶠ
+
+
+  lemma-23 : ∀{A} → {PA PB : Property {ℓ} A} → ⊨ ((PA ⟶ᶠ⁺ PB) ⟶ (PA ⟶ᶠ PB))
+  lemma-23 {_} {PA} {PB} a f x = lemma-3 a {PB} (n≤1+n _) (f x)
 
 -- -▹ 
 
-  lemma-16 : ∀{A} → {PA PB : Property {ℓ} A} → Tautology ((PA -▹ PB) ≣ ((Cl PA -▹ Cl PB) & (PA ⟶ PB)))
+  lemma-16 : ∀{A} → {PA PB : Property {ℓ} A} → ⊨ ((PA -▹ PB) ≣ ((Cl PA -▹ Cl PB) & (PA ⟶ PB)))
   lemma-16 {A} {PA} {PB} a = h1 , h2 where
     h1 : ((PA -▹ PB) ⟶ ((Cl PA -▹ Cl PB) & (PA ⟶ PB))) a
     h1 (impl , pimpl) = (h11 , h12) , impl where
@@ -231,7 +241,7 @@ module _ {ℓ} where
 -- -▹⁺
 
 -- TODO The proof is identical with lemma-3 . Maybe generalize both into one.
-  lemma-17 : ∀{A} → {PA PB : Property {ℓ} A} → Tautology ((PA -▹⁺ PB) ≣ ((Cl PA -▹⁺ Cl PB) & (PA ⟶ PB)))
+  lemma-17 : ∀{A} → {PA PB : Property {ℓ} A} → ⊨ ((PA -▹⁺ PB) ≣ ((Cl PA -▹⁺ Cl PB) & (PA ⟶ PB)))
   lemma-17 {A} {PA} {PB} a = h1 , h2 where
     h1 : ((PA -▹⁺ PB) ⟶ ((Cl PA -▹⁺ Cl PB) & (PA ⟶ PB))) a
     h1 (impl , pimpl) = (h11 , h12) , impl where
@@ -267,7 +277,7 @@ module _ {ℓ} where
   lemma-18 : ∀{A} → {PA PB : Property {ℓ} A}
              → (d : ∀ m (a : A ʷ∥ m) → Dec (a ∈ᶠ PB))
              → P¬∅ PA
-             → Tautology ((Cl PA -▹⁺ PB) ≣ ((PB -▹ Cl PA) -▹ PB))
+             → ⊨ ((Cl PA -▹⁺ PB) ≣ ((PB -▹ Cl PA) -▹ PB))
   lemma-18 {A} {PA} {PB} d (s¬∅ , s¬∅∈PA) a = h1 , h2 where
     h1 : ((Cl PA -▹⁺ PB) ⟶ ((PB -▹ Cl PA) -▹ PB)) a
     h1 (impl , pimpl) = h11 , h12 where
@@ -310,3 +320,50 @@ module _ {ℓ} where
                           in ⊥-elim (¬p (lemma-3 a e x))}
 
 
+  lemma-21 : ∀{A} → {PA PB : Property {ℓ} A}
+             → ⊨ ((Cl PA -▹ Cl PB) ≣ (Cl (Cl PA -▹ Cl PB)))
+  lemma-21 {A} {PA} {PB} a = h1 , h2 where
+    h1 : ((Cl PA -▹ Cl PB) ⟶ (Cl (Cl PA -▹ Cl PB))) a
+    h1 = lemma-11 (Cl PA -▹ Cl PB) a
+    h2 : ((Cl (Cl PA -▹ Cl PB)) ⟶ (Cl PA -▹ Cl PB)) a
+    h2 (s , s∈-▹ , lm) = h22 , h21 where
+      h21 : (Cl PA ⟶ᶠ Cl PB) a
+      h21 {k} x = h214 where
+        h211 = lm k
+        n = proj₁ h211
+        eq = (proj₂ h211) 0
+        h212 = lemma-20 a (s n) k x (symᶠ eq)
+        h213 = (proj₂ (s∈-▹ _)) h212
+        h214 = lemma-20 (s n) a k h213 eq
+      h22 : (Cl PA ⟶ Cl PB) a
+      h22 = lemma-15 {_} {PA} {PB} a h21
+
+  lemma-22 : ∀{A} → {PA PB : Property {ℓ} A}
+             → ⊨ ((Cl PA -▹⁺ Cl PB) ≣ (Cl (Cl PA -▹⁺ Cl PB)))
+  lemma-22 {_} {PA} {PB} a = h1 , h2 where
+    h1 : ((Cl PA -▹⁺ Cl PB) ⟶ (Cl (Cl PA -▹⁺ Cl PB))) a
+    h1 = lemma-11 (Cl PA -▹⁺ Cl PB) a
+    h2 : ((Cl (Cl PA -▹⁺ Cl PB)) ⟶ (Cl PA -▹⁺ Cl PB)) a
+    h2  (s , s∈-▹ , lm) = h22 , h21 where
+      h21 : (Cl PA ⟶ᶠ⁺ Cl PB) a
+      h21 {k} x = h214 where
+        h211 = lm (suc k)
+        n = proj₁ h211
+        eq = (proj₂ h211) 0
+        h212 = lemma-20 a (s n) k x (lemma-2 a (s n) (n≤1+n _) (symᶠ eq))
+        h213 = (proj₂ (s∈-▹ _)) h212
+        h214 = lemma-20 (s n) a (suc k) h213 eq
+      h22 : (Cl PA ⟶ Cl PB) a
+      h22 = lemma-15 {_} {PA} {PB} a (lemma-23 {_} {Cl PA} {Cl PB} a h21)
+
+  lemma-24 : ∀{A} → {PA PB PC : Property {ℓ} A}
+             → ⊨ (Cl PC ⟶ (Cl PA -▹ Cl PB)) → ⊨ ((Cl PC & Cl PA) ⟶ Cl PB)
+  lemma-24 {_} {PA} {PB} {PC} f a (x , y) = proj₁ (f a x) y
+
+  lemma-25 : ∀{A} → {PA PB PC : Property {ℓ} A}
+             → ⊨ ((Cl PC & Cl PA) ⟶ Cl PB) → ⊨ (Cl PC ⟶ (Cl PA -▹ Cl PB)) 
+  lemma-25 {_} {PA} {PB} {PC} f a x = h1 , h2 where
+    h1 : (Cl PA ⟶ Cl PB) a
+    h1 y = f a (x , y)
+    h2 : (Cl PA ⟶ᶠ Cl PB) a
+    h2 (s , s∈ClPA , eq) = {!!} 
