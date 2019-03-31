@@ -5,46 +5,122 @@ import TLA.Common as C
 
 import Level as L
 import Relation.Binary.PropositionalEquality as P
-open import Data.Fin using (Fin ; toℕ ; inject≤)
-open import Data.Fin.Properties using (toℕ-inject≤)
-open import Data.Nat using (ℕ ; _+_ ; zero ; suc ; _≤_ ; _⊔_ ; _≤″_ ; _<_ ; s≤s ; _≤?_)
+import Relation.Binary.HeterogeneousEquality as H
+open import Data.Fin using (Fin ; toℕ ; inject≤ ; cast)
+open import Data.Fin.Properties using (toℕ-inject≤ ; inject≤-refl
+                                      ; inject≤-irrelevant
+                                      ; inject≤-idempotent)
+open import Data.Nat using (ℕ ; _+_ ; zero ; suc ; _≤_ ; _⊔_ ; _≤″_ ; _<_ ; s≤s ; z≤n ; _≤?_ ; ≤-pred)
 open import Data.Nat.Properties using (m≤m⊔n ; n≤m⊔n ; ≤⇒≤″ ; +-comm ; +-assoc
-                                      ; n≤m+n ; ≤-trans ; +-suc ; n≤1+n ; ≰⇒> )
+                                      ; n≤m+n ; ≤-trans ; +-suc ; n≤1+n ; ≰⇒> ; ≤-reflexive)
 open import Data.Product  
 open import Data.Empty
 open import Relation.Nullary
-open import Function
+open import Data.List using (List ; [] ; _∷_ ; tabulate ; lookup ; filter ; length )
+open import Data.List.Properties using (∷-injective ; ∷-injectiveˡ ; length-tabulate ; lookup-tabulate)
+import Function as F
 
 open import LTL.Core
 open import LTL.Stateless hiding (_⇒_)
 
-module _ {ℓ} where
+module _ {ℓ} {A : Set ℓ} where
 
 
--- Properties
+-- BSets
 
-  lemma-1 : {A : Set ℓ} → (a : A ʷ) → {P : Property A} → P¬∅ P → prefix a 0 ∈ᶠ P
+  lemma-1 : (a : A ʷ) → {P : BSet A} → P¬∅ P → a ᵖ∥ 0 ∈ᶠ P
   lemma-1 a (s , s∈P ) = s , s∈P , (λ ())
+
+
+-- Stuttering
+  module _ {dec : ∀ (x y : A) → Dec (x P.≡ y)} where
+    open St {ℓ} {A} {dec}
+
+    lemma-26 : (a : A ʷ) → [ ⟨ ¬_ ⟩ $ Stutter a ] → ∀ m
+               → let na = ♮ᶠ (a ᵖ∥ (suc m))
+                 in Σ (suc m P.≡ suc (proj₁ na)) λ eq → [ (a ᵖ∥ (suc m) ≤ᶠ proj₂ na) (≤-reflexive eq) ]∥
+    lemma-26 a SF zero = P.refl , λ fn → P.cong a (P.sym (toℕ-inject≤ fn (s≤s z≤n)))
+    lemma-26 a SF (suc m)
+      with ♮ᶠ {m} (○ᶠ (a ᵖ∥ (suc (suc m)))) | lemma-26 (○ a) (○ SF) m
+    ... | n , b | g with dec ((a ᵖ∥ suc (suc m)) Fin.zero) (b Fin.zero)
+    lemma-26 a SF (suc m) | n , b | g | yes p = ⊥-elim (SF 0 (P.trans p (P.sym ((proj₂ g) Fin.zero))))
+    lemma-26 a SF (suc m) | n , b | g | no ¬p
+      =   P.cong suc (proj₁ g)
+        , λ { Fin.zero → P.refl
+            ; (Fin.suc fn) → P.trans ((proj₂ g) fn)
+                                  (P.cong b (inject≤-irrelevant fn ((≤-reflexive (proj₁ g)))
+                                                                   (≤-pred (≤-reflexive (P.cong suc (proj₁ g))))))}
+
+    lemma-29 :  ∀{m n k} → (rl1 : m ≤ n) → (rl2 : n ≤ k)
+                → (a : A ʷ∥ m) → (b : A ʷ∥ n) → (c : A ʷ∥ k)
+                → [ (a ≤ᶠ b) rl1 ]∥ → [ (b ≤ᶠ c) rl2 ]∥ → [ (a ≤ᶠ c) (≤-trans rl1 rl2) ]∥
+    lemma-29 m≤n m≤k a b c altb bltc fn = P.trans h1 (P.trans h2 (P.cong c (inject≤-idempotent fn m≤n m≤k))) where
+      h1 = altb fn
+      h2 = bltc (inject≤ fn m≤n)
+
+    lemma-30 :  ∀{m n} → (rl1 rl2 : m ≤ n)
+                → (a : A ʷ∥ m) → (b : A ʷ∥ n) → [ (a ≤ᶠ b) rl1 ≡ᶠ (a ≤ᶠ b) rl2 ]∥
+    lemma-30 rl1 rl2 a b fn = P.cong (λ z → (a fn P.≡ b z)) (inject≤-irrelevant fn rl1 rl2)
+
+    lemma-28 :  ∀{m n k} → {a : A ʷ∥ (suc m)} → {b : A ʷ∥ (suc n)} → {c : A ʷ∥ (suc k)}
+                → a ≃ᶠ b → b ≃ᶠ c → a ≃ᶠ c
+    lemma-28 {m} {n} {k} {a} {b} {c} (eq1 , rl1) (eq2 , rl2)
+      = (P.trans eq1 eq2) , h2 where
+      h1 = lemma-29 (≤-reflexive eq1) (≤-reflexive eq2) (proj₂ (♮ᶠ a)) (proj₂ (♮ᶠ b)) (proj₂ (♮ᶠ c)) rl1 rl2
+      h2 = λ fn → P.subst (λ z → z) (lemma-30 (≤-trans (≤-reflexive eq1) (≤-reflexive eq2)) (≤-reflexive (P.trans eq1 eq2)) (proj₂ (♮ᶠ a)) (proj₂ (♮ᶠ c)) fn) (h1 fn)
+
+  --  lemma-34 :  ∀{m} → {a : A ʷ}
+    --            → let na = proj₂ (♮ᶠ (a ᵖ∥ m))
+--                → ? -- Stutterᶠ na
+   -- lemma-34 = ?
+
+    -- lemma-35  a 0 = ♮ a 0
+   
+    lemma-33 :  ∀{m n} → {a : A ʷ} → (rl : m ≤ n)
+                → let na = ♮ᶠ (a ᵖ∥ (suc m))
+                      nb = ♮ᶠ (a ᵖ∥ (suc n))
+                  in ∃ λ rl → [ (proj₂ na ≤ᶠ proj₂ nb) rl ]∥
+    lemma-33 {.0} {zero} {a} z≤n = s≤s z≤n , λ fn → P.cong a (P.sym (toℕ-inject≤ fn (s≤s z≤n)))
+    lemma-33 {zero} {suc n} {a} rl = {!!}
+    lemma-33 {suc m} {suc n} {a} rl = {!!}
+    
+    lemma-32 :  ∀{m n} → {a : A ʷ} → {b : A ʷ}
+                → a ᵖ∥ (suc m) ≃ᶠ b ᵖ∥ (suc n) → ∀ k → k ≤ m → ∃ (λ e → a ᵖ∥ (suc k) ≃ᶠ b ᵖ∥ (suc e))
+    lemma-32 {m} {n} {a} {b} eq k rl = {!!}
+
+    lemma-31 : {a : A ʷ} → {b : A ʷ} → {c : A ʷ}
+               → a ≃ b → b ≃ c → a ≃ c
+    lemma-31 a≃b b≃c m with a≃b m | b≃c m
+    lemma-31 a≃b b≃c m | n1 , k1 , mltsn1 , rl1 | n2 , k2 , mltsn2 , rl2
+      = {!!}
+      
+    
+    lemma-27 : ∀{PA} → ⊨ (Γ (Γ PA) ≣ Γ PA)
+    lemma-27 a = h1 , {!!} where
+      h1 : (Γ (Γ _) ⟶ Γ _) a
+      h1 (s , a≃s , q , s≃q , q∈PA) = q , ({!lemma-28 a≃s s≃q!} , q∈PA)
+    
+--  lemma-27 : ∀{m PA′} → (a : A ʷ∥ (suc m)) → (PA : Γ PA′) → a ∈ᶠ
 
 
 -- PREFIXES
 
 -- If we have proved equality of prefixes at length m , then equality is true for smaller prefixes.
-  lemma-2 : {A : Set ℓ} → (a b : A ʷ) → ∀ {m n} → n ≤ m
-            → [ prefix a m ≡ᶠ prefix b m ]∥ → [ prefix a n ≡ᶠ prefix b n ]∥
+  lemma-2 : (a b : A ʷ) → ∀ {m n} → n ≤ m
+            → [ a ᵖ∥ m ≡ᶠ b ᵖ∥ m ]∥ → [ a ᵖ∥ n ≡ᶠ b ᵖ∥ n ]∥
   lemma-2 a b nltm rst fn = q where
     w = rst (inject≤ fn nltm)
     q = P.subst (λ z → (a ≡ b) z) (toℕ-inject≤ fn nltm) w
 
-  lemma-3 : ∀{m n} → {A : Set ℓ} → (a : A ʷ) → {P : Property A} → n ≤ m
-             → prefix a m ∈ᶠ P → prefix a n ∈ᶠ P
+  lemma-3 : ∀{m n} → (a : A ʷ) → {P : BSet A} → n ≤ m
+             → a ᵖ∥ m ∈ᶠ P → a ᵖ∥ n ∈ᶠ P
   lemma-3 a n≤m (s , s∈P , eq) = s , s∈P , (lemma-2 s a n≤m eq)
 
 -- _∈ᶠ_
 
-  lemma-20 : {A : Set ℓ} → (a b : A ʷ) → {P : Property A}
-             → ∀ m → prefix a m ∈ᶠ P → [ prefix a m ≡ᶠ prefix b m ]∥
-             → prefix b m ∈ᶠ P
+  lemma-20 : {A : Set ℓ} → (a b : A ʷ) → {P : BSet A}
+             → ∀ m → a ᵖ∥ m ∈ᶠ P → [ a ᵖ∥ m ≡ᶠ b ᵖ∥ m ]∥
+             → b ᵖ∥ m ∈ᶠ P
   lemma-20 a b m pa∈ᶠP eq
     = (proj₁ pa∈ᶠP) , ((proj₁ (proj₂ pa∈ᶠP))
                       , λ fn → P.trans (proj₂ (proj₂ pa∈ᶠP) fn) (eq fn))
@@ -69,8 +145,8 @@ module _ {ℓ} where
         nb = proj₁ (lmb m)
         eqb = proj₂ (lmb m)
         max = na ⊔ nb
-        h1 : ∀ k → [ (prefix (seqa (k + max)) m) ≡ᶠ (prefix (seqb (k + max)) m) ]∥
-        h1 k = P.subst₂ (λ a b → [ (prefix (seqa a) m) ≡ᶠ (prefix (seqb b) m) ]∥)
+        h1 : ∀ k → [ ((seqa (k + max)) ᵖ∥ m) ≡ᶠ ((seqb (k + max)) ᵖ∥ m) ]∥
+        h1 k = P.subst₂ (λ a b → [ ((seqa a) ᵖ∥ m) ≡ᶠ ((seqb b) ᵖ∥ m) ]∥)
                         (P.sym (proj₂ h11)) (P.sym (proj₂ h12)) (h13 (proj₁ h11) (proj₁ h12)) where
           h11 : ∃ λ z → k + max P.≡ z + na
           h11 = let q = m≤m⊔n na nb
@@ -80,7 +156,7 @@ module _ {ℓ} where
           h12 = let q = n≤m⊔n na nb
                     w = P.sym (P.trans (+-comm _ nb) (_≤″_.proof (≤⇒≤″ q)))
                 in k + _ , P.trans (P.cong (λ z → k + z) w) (P.sym (+-assoc k _ nb))
-          h13 : ∀ z1 z2 → [ (prefix (seqa (z1 + na)) m) ≡ᶠ (prefix (seqb (z2 + nb)) m) ]∥
+          h13 : ∀ z1 z2 → [ ((seqa (z1 + na)) ᵖ∥ m) ≡ᶠ ((seqb (z2 + nb)) ᵖ∥ m) ]∥
           h13 z1 z2 fn = P.trans (eqa z1 fn) (P.sym (eqb z2 fn))
 
 -- If one sequence converges to a point a and another sequence, that other sequence
@@ -93,8 +169,8 @@ module _ {ℓ} where
         nsq = proj₁ (lmsq m)
         eqsq = proj₂ (lmsq m)
         max = na ⊔ nsq
-        h1 : ∀ k → [ (prefix (seqb (k + max)) m) ≡ᶠ (prefix lm m) ]∥
-        h1 k fn = P.trans (P.cong (λ z → prefix (seqb z) m fn) (proj₂ h12)) (h13 fn) where
+        h1 : ∀ k → [ ((seqb (k + max)) ᵖ∥ m) ≡ᶠ (lm ᵖ∥ m) ]∥
+        h1 k fn = P.trans (P.cong (λ z → ((seqb z) ᵖ∥ m) fn) (proj₂ h12)) (h13 fn) where
           h11 : ∃ λ z → k + max P.≡ z + na
           h11 = let q = m≤m⊔n na nsq
                     w = P.sym (P.trans (+-comm _ na) (_≤″_.proof (≤⇒≤″ q)))
@@ -103,19 +179,19 @@ module _ {ℓ} where
           h12 = let q = n≤m⊔n na nsq
                     w = P.sym (P.trans (+-comm _ nsq) (_≤″_.proof (≤⇒≤″ q)))
                 in k + _ , P.trans (P.cong (λ z → k + z) w) (P.sym (+-assoc k _ nsq))
-          h13 : [ (prefix (seqb ((proj₁ h12) + nsq)) m) ≡ᶠ (prefix lm m) ]∥
+          h13 : [ ((seqb ((proj₁ h12) + nsq)) ᵖ∥ m) ≡ᶠ (lm ᵖ∥ m) ]∥
           h13 fn = P.trans (P.sym (eqsq (proj₁ h12) fn)) (P.trans h131 (eqa (proj₁ h11) fn)) where
             h131 : _
             h131 = P.cong (λ z → seqa z (toℕ fn)) (P.trans (P.sym (proj₂ h12)) (proj₂ h11))
 
 -- The condition of this lemma is always possible (by taking a subsequence)
 -- and it simplifies the proofs considerably.
-  lemma-7 : {A : Set ℓ} → (seqa seqb : Seq A)
+  lemma-7 : (seqa seqb : Seq A)
             → LimitSqᶠⁱ (seqa  stoSeqᶠⁱ) (seqb  stoSeqᶠⁱ)
             → LimitSq seqa seqb
   lemma-7 seqa seqb f m = m , λ k → lemma-2 (seqa (k + m)) (seqb (k + m)) (n≤m+n k m) (f (k + m))
 
-  lemma-8 : {A : Set ℓ} → (seq : Seq A) → (a : A ʷ)
+  lemma-8 : (seq : Seq A) → (a : A ʷ)
             → Limitᶠⁱ a (seq  stoSeqᶠⁱ)
             → Limit a seq
   lemma-8 seq a f m = m , λ k → lemma-2 (seq (k + m)) a (n≤m+n k m) (f (k + m))
@@ -125,7 +201,7 @@ module _ {ℓ} where
   lemma-9 : {A : Set ℓ} → (lm : A ʷ) → (seqa : Seq A) → Limit lm seqa
              → (f : ℕ → ℕ) → (rl : ∀ k → f k < f (suc k)) → Limit lm (subSeq seqa f rl)
   lemma-9 lp seqa lm f rl m = nf , λ k → let e = P.trans (+-comm _ n) (_≤″_.proof (≤⇒≤″ (eqf k)))
-                                          in P.subst (λ z → [ prefix (seqa z) m ≡ᶠ prefix lp m ]∥) e (eq _) where
+                                          in P.subst (λ z → [ (seqa z) ᵖ∥ m ≡ᶠ lp ᵖ∥ m ]∥) e (eq _) where
     n = proj₁ (lm m)
     eq = proj₂ (lm m)
     h1 = C.lemma-1 f rl n
@@ -146,33 +222,33 @@ module _ {ℓ} where
       n = proj₁ (lm (suc m))
     rl : ∀ k → f k < f (suc k)
     rl k = m≤m⊔n (suc (f k)) (proj₁ (lm (suc k)))
-    h1 : (k : ℕ) → [ prefix (subSeq seqa f rl (suc k)) (suc k) ≡ᶠ prefix lp (suc k) ]∥
+    h1 : (k : ℕ) → [ (subSeq seqa f rl (suc k)) ᵖ∥ (suc k) ≡ᶠ lp ᵖ∥ (suc k) ]∥
     h1 k = h12 h13 where
       n = proj₁ (lm (suc k))
       h11 = P.trans (+-comm _ n) (_≤″_.proof (≤⇒≤″ (n≤m⊔n (suc (f k)) n)))
-      h12 = P.subst (λ z → [ prefix (seqa z) (suc k) ≡ᶠ prefix lp (suc k) ]∥) h11
+      h12 = P.subst (λ z → [ (seqa z) ᵖ∥ (suc k) ≡ᶠ lp ᵖ∥ (suc k) ]∥) h11
       h13 = (proj₂ (lm (suc k))) _
     
 -- Closures
 
-  lemma-11 : {A : Set ℓ} → (P : Property A) → ⊨ (P ⟶ Cl P)
+  lemma-11 : {A : Set ℓ} → (P : BSet A) → ⊨ (P ⟶ Cl P)
   lemma-11 P a a∈P = ⟨ a ⟩ , ⟨ a∈P ⟩ , lemma-4 a
 
-  lemma-12 : {A : Set ℓ} → (P : Property A) → ⊨ (P ⟶ᶠ Cl P)
+  lemma-12 : {A : Set ℓ} → (P : BSet A) → ⊨ (P ⟶ᶠ Cl P)
   lemma-12 P a (sa , sa∈P , eq) = sa , (lemma-11 P sa sa∈P) , eq
   
-  lemma-13 : ∀{A} → {P : Property {ℓ} A} → (a : A ʷ) → a ∈ Cl P → ∀ m → prefix a m ∈ᶠ P
+  lemma-13 : ∀{A} → {P : BSet {ℓ} A} → (a : A ʷ) → a ∈ Cl P → ∀ m → a ᵖ∥ m ∈ᶠ P
   lemma-13 a (seq , seq∈P , lm) m
     = let n , eq = lm m
       in seq n , seq∈P n , eq zero
 
-  lemma-14 : ∀{A} → {P : Property {ℓ} A} → ∀{m} → {a : A ʷ∥ m} → a ∈ᶠ Cl P → a ∈ᶠ P
+  lemma-14 : ∀{A} → {P : BSet {ℓ} A} → ∀{m} → {a : A ʷ∥ m} → a ∈ᶠ Cl P → a ∈ᶠ P
   lemma-14 {_} {P} {m} {a} (s , s∈ClP , eq)
     = let (sp , sp∈P , eqP) = lemma-13 {_} {P} s s∈ClP m
       in sp , sp∈P , λ fn → P.trans (eqP fn) (eq fn)
 
 
-  lemma-19 : ∀{A} → {P : Property {ℓ} A} → (a : A ʷ) → (seq : Seqᶠⁱ A)
+  lemma-19 : {P : BSet {ℓ} A} → (a : A ʷ) → (seq : Seqᶠⁱ A)
              → Limitᶠⁱ a seq → seq s∈ᶠⁱ P → a ∈ Cl P
   lemma-19 a seq lm sq∈ᶠⁱP = nsq , nsq∈P , lemma-8 nsq a h1 where
     nsq = λ m → proj₁ (sq∈ᶠⁱP m)
@@ -183,8 +259,8 @@ module _ {ℓ} where
 
 -- ⟶ᶠ
 
-  lemma-15 : ∀{A} → {PA PB : Property {ℓ} A} → ⊨ ((Cl PA ⟶ᶠ Cl PB) ⟶ (Cl PA ⟶ Cl PB))
-  lemma-15 {_} {PA} {PB} a pimpl (sq , sq∈PA , lm) = h4  where
+  lemma-15 : {PA PB : BSet {ℓ} A} → ⊨ ((Cl PA ⟶ᶠ Cl PB) ⟶ (Cl PA ⟶ Cl PB))
+  lemma-15 {PA} {PB} a pimpl (sq , sq∈PA , lm) = h4  where
     h1 = lemma-10 a sq lm
     f  = proj₁ h1
     rl = proj₁ (proj₂ h1)
@@ -202,13 +278,13 @@ module _ {ℓ} where
 -- ⟶ᶠ
 
 
-  lemma-23 : ∀{A} → {PA PB : Property {ℓ} A} → ⊨ ((PA ⟶ᶠ⁺ PB) ⟶ (PA ⟶ᶠ PB))
-  lemma-23 {_} {PA} {PB} a f x = lemma-3 a {PB} (n≤1+n _) (f x)
+  lemma-23 : {PA PB : BSet {ℓ} A} → ⊨ ((PA ⟶ᶠ⁺ PB) ⟶ (PA ⟶ᶠ PB))
+  lemma-23 {PA} {PB} a f x = lemma-3 a {PB} (n≤1+n _) (f x)
 
 -- -▹ 
 
-  lemma-16 : ∀{A} → {PA PB : Property {ℓ} A} → ⊨ ((PA -▹ PB) ≣ ((Cl PA -▹ Cl PB) & (PA ⟶ PB)))
-  lemma-16 {A} {PA} {PB} a = h1 , h2 where
+  lemma-16 : {PA PB : BSet {ℓ} A} → ⊨ ((PA -▹ PB) ≣ ((Cl PA -▹ Cl PB) & (PA ⟶ PB)))
+  lemma-16 {PA} {PB} a = h1 , h2 where
     h1 : ((PA -▹ PB) ⟶ ((Cl PA -▹ Cl PB) & (PA ⟶ PB))) a
     h1 (impl , pimpl) = (h11 , h12) , impl where
       h11 : (Cl PA ⟶ Cl PB) a
@@ -225,11 +301,11 @@ module _ {ℓ} where
         nsq m = proj₁ (h113 m)
         nsq∈PB : nsq s∈ PB
         nsq∈PB m = proj₁ (proj₂ (h113 m))
-        nsqeq : (m : ℕ) → [ prefix (nsq m) m ≡ᶠ prefix a m ]∥
+        nsqeq : (m : ℕ) → [ (nsq m) ᵖ∥ m ≡ᶠ a ᵖ∥ m ]∥
         nsqeq m = proj₂ (proj₂ (h113 m))
         h114 = lemma-7 sbsq nsq λ k fn → P.trans (eq k fn) (P.sym (nsqeq k fn))
         h115 = lemma-6 a {sbsq} {nsq} h112 h114
-      h12 : (∀{m} → (prefix a m) ∈ᶠ (Cl PA) → (prefix a m) ∈ᶠ (Cl PB))
+      h12 : (∀{m} → (a ᵖ∥ m) ∈ᶠ (Cl PA) → (a ᵖ∥ m) ∈ᶠ (Cl PB))
       h12 {m} a∈ClPA = lemma-12 PB a h122 where
         h121 = lemma-14 {P = PA} a∈ClPA
         h122 = pimpl h121
@@ -241,8 +317,8 @@ module _ {ℓ} where
 -- -▹⁺
 
 -- TODO The proof is identical with lemma-3 . Maybe generalize both into one.
-  lemma-17 : ∀{A} → {PA PB : Property {ℓ} A} → ⊨ ((PA -▹⁺ PB) ≣ ((Cl PA -▹⁺ Cl PB) & (PA ⟶ PB)))
-  lemma-17 {A} {PA} {PB} a = h1 , h2 where
+  lemma-17 : {PA PB : BSet {ℓ} A} → ⊨ ((PA -▹⁺ PB) ≣ ((Cl PA -▹⁺ Cl PB) & (PA ⟶ PB)))
+  lemma-17 {PA} {PB} a = h1 , h2 where
     h1 : ((PA -▹⁺ PB) ⟶ ((Cl PA -▹⁺ Cl PB) & (PA ⟶ PB))) a
     h1 (impl , pimpl) = (h11 , h12) , impl where
       h11 : (Cl PA ⟶ Cl PB) a
@@ -259,11 +335,11 @@ module _ {ℓ} where
         nsq m = proj₁ (h113 m)
         nsq∈PB : nsq s∈ PB
         nsq∈PB m = proj₁ (proj₂ (h113 m))
-        nsqeq : (m : ℕ) → [ prefix (nsq m) m ≡ᶠ prefix a m ]∥
+        nsqeq : (m : ℕ) → [ (nsq m) ᵖ∥ m ≡ᶠ a ᵖ∥ m ]∥
         nsqeq m = lemma-2 (nsq m) a (n≤1+n m) (proj₂ (proj₂ (h113 m)))
         h114 = lemma-7 sbsq nsq λ k fn → P.trans (eq k fn) (P.sym (nsqeq k fn))
         h115 = lemma-6 a {sbsq} {nsq} h112 h114
-      h12 : (∀{m} → (prefix a m) ∈ᶠ (Cl PA) → (prefix a (suc m)) ∈ᶠ (Cl PB))
+      h12 : (∀{m} → (a ᵖ∥ m) ∈ᶠ (Cl PA) → (a ᵖ∥ (suc m)) ∈ᶠ (Cl PB))
       h12 {m} a∈ClPA = lemma-12 PB a h122 where
         h121 = lemma-14 {P = PA} a∈ClPA
         h122 = pimpl h121
@@ -274,11 +350,11 @@ module _ {ℓ} where
 -- This depends on the decidability of property PB on finite prefixes
 -- which must be decidable if the each element is decidable. TODO
 -- It also requires that PA is non-empty.
-  lemma-18 : ∀{A} → {PA PB : Property {ℓ} A}
+  lemma-18 : {PA PB : BSet {ℓ} A}
              → (d : ∀ m (a : A ʷ∥ m) → Dec (a ∈ᶠ PB))
              → P¬∅ PA
              → ⊨ ((Cl PA -▹⁺ PB) ≣ ((PB -▹ Cl PA) -▹ PB))
-  lemma-18 {A} {PA} {PB} d (s¬∅ , s¬∅∈PA) a = h1 , h2 where
+  lemma-18 {PA} {PB} d (s¬∅ , s¬∅∈PA) a = h1 , h2 where
     h1 : ((Cl PA -▹⁺ PB) ⟶ ((PB -▹ Cl PA) -▹ PB)) a
     h1 (impl , pimpl) = h11 , h12 where
       h11 : ((PB -▹ Cl PA) ⟶ PB) a
@@ -307,22 +383,22 @@ module _ {ℓ} where
       h21 a∈ClPA = impl ((λ _ → a∈ClPA) , λ _ → a , a∈ClPA , λ fn → P.refl)
       h22 : (Cl PA ⟶ᶠ⁺ PB) a
       h22 {m} a∈ᶠClPA@(s , s∈∁lPA , eq)
-        = case (d (suc m) (prefix a (suc m))) of
+        = F.case (d (suc m) (a ᵖ∥ (suc m))) of
             λ { (yes p) → p
             ; (no ¬p) → ⊥-elim (¬p (pimpl (a , ((h221 ¬p
                                , h222 ¬p) , λ fn → P.refl))))} where
-          h221 : ¬ (prefix a (suc m) ∈ᶠ PB) → (PB ⟶ Cl PA) a
+          h221 : ¬ (a ᵖ∥ (suc m) ∈ᶠ PB) → (PB ⟶ Cl PA) a
           h221 ¬p x = ⊥-elim (¬p (a , x , (λ x₁ → P.refl)))
-          h222 : ¬ (prefix a (suc m) ∈ᶠ PB) → (PB ⟶ᶠ Cl PA) a
-          h222 ¬p {k} x = case (k ≤? m) of
+          h222 : ¬ (a ᵖ∥ (suc m) ∈ᶠ PB) → (PB ⟶ᶠ Cl PA) a
+          h222 ¬p {k} x = F.case (k ≤? m) of
             λ { (yes q) → lemma-3 a q a∈ᶠClPA
               ; (no ¬q) → let e = ≰⇒> ¬q
                           in ⊥-elim (¬p (lemma-3 a e x))}
 
 
-  lemma-21 : ∀{A} → {PA PB : Property {ℓ} A}
+  lemma-21 : {PA PB : BSet {ℓ} A}
              → ⊨ ((Cl PA -▹ Cl PB) ≣ (Cl (Cl PA -▹ Cl PB)))
-  lemma-21 {A} {PA} {PB} a = h1 , h2 where
+  lemma-21 {PA} {PB} a = h1 , h2 where
     h1 : ((Cl PA -▹ Cl PB) ⟶ (Cl (Cl PA -▹ Cl PB))) a
     h1 = lemma-11 (Cl PA -▹ Cl PB) a
     h2 : ((Cl (Cl PA -▹ Cl PB)) ⟶ (Cl PA -▹ Cl PB)) a
@@ -336,11 +412,11 @@ module _ {ℓ} where
         h213 = (proj₂ (s∈-▹ _)) h212
         h214 = lemma-20 (s n) a k h213 eq
       h22 : (Cl PA ⟶ Cl PB) a
-      h22 = lemma-15 {_} {PA} {PB} a h21
+      h22 = lemma-15 {PA} {PB} a h21
 
-  lemma-22 : ∀{A} → {PA PB : Property {ℓ} A}
+  lemma-22 : {PA PB : BSet {ℓ} A}
              → ⊨ ((Cl PA -▹⁺ Cl PB) ≣ (Cl (Cl PA -▹⁺ Cl PB)))
-  lemma-22 {_} {PA} {PB} a = h1 , h2 where
+  lemma-22 {PA} {PB} a = h1 , h2 where
     h1 : ((Cl PA -▹⁺ Cl PB) ⟶ (Cl (Cl PA -▹⁺ Cl PB))) a
     h1 = lemma-11 (Cl PA -▹⁺ Cl PB) a
     h2 : ((Cl (Cl PA -▹⁺ Cl PB)) ⟶ (Cl PA -▹⁺ Cl PB)) a
@@ -354,15 +430,15 @@ module _ {ℓ} where
         h213 = (proj₂ (s∈-▹ _)) h212
         h214 = lemma-20 (s n) a (suc k) h213 eq
       h22 : (Cl PA ⟶ Cl PB) a
-      h22 = lemma-15 {_} {PA} {PB} a (lemma-23 {_} {Cl PA} {Cl PB} a h21)
+      h22 = lemma-15 {PA} {PB} a (lemma-23 {Cl PA} {Cl PB} a h21)
 
-  lemma-24 : ∀{A} → {PA PB PC : Property {ℓ} A}
+  lemma-24 : {PA PB PC : BSet {ℓ} A}
              → ⊨ (Cl PC ⟶ (Cl PA -▹ Cl PB)) → ⊨ ((Cl PC & Cl PA) ⟶ Cl PB)
-  lemma-24 {_} {PA} {PB} {PC} f a (x , y) = proj₁ (f a x) y
+  lemma-24 {PA} {PB} {PC} f a (x , y) = proj₁ (f a x) y
 
-  lemma-25 : ∀{A} → {PA PB PC : Property {ℓ} A}
+  lemma-25 : {PA PB PC : BSet {ℓ} A}
              → ⊨ ((Cl PC & Cl PA) ⟶ Cl PB) → ⊨ (Cl PC ⟶ (Cl PA -▹ Cl PB)) 
-  lemma-25 {_} {PA} {PB} {PC} f a x = h1 , h2 where
+  lemma-25 {PA} {PB} {PC} f a x = h1 , h2 where
     h1 : (Cl PA ⟶ Cl PB) a
     h1 y = f a (x , y)
     h2 : (Cl PA ⟶ᶠ Cl PB) a
