@@ -53,6 +53,10 @@ module _ {ℓ} where
   _≤ᶠ_ : ∀{m n} → {C : Set ℓ} → (a : C ʷ∥ m) → (b : C ʷ∥ n) → m N.≤ n → Set ℓ ʷ∥ m
   (a ≤ᶠ b) m≤n fn = a fn P.≡ b (inject≤ fn m≤n)
 
+  _≅ᶠ_ : ∀{m n} → {C : Set ℓ} → (a : C ʷ∥ m) → (b : C ʷ∥ n) → Set ℓ
+  _≅ᶠ_ {m} {n} a b = Σ (m P.≡ n) λ eq → [ (a ≤ᶠ b) (≤-reflexive eq) ]∥
+
+
   infix 30 _ᵖ∥_
   _ᵖ∥_ : {A : Set ℓ} → (a : A ʷ) → (m : ℕ) → A ʷ∥ m
   (a ᵖ∥ m) fn = a (toℕ fn)
@@ -162,8 +166,8 @@ module _ {ℓ} where
   Stutter-free : {A : Set ℓ} → A ʷ → Set ℓ
   Stutter-free a = [ ⟨ ¬_ ⟩ $ Stutter a ] ⊎ [ (⟨ ¬_ ⟩ $ Stutter a) U □ᶠ (Stutter a) ]
 
-  Stutterᶠ : {A : Set ℓ} → ∀ m → A ʷ∥ (suc m) → (Set ℓ) ʷ∥ m
-  Stutterᶠ m a = (a ᵖᶠ∥ m) {n≤1+n m} ≡ᶠ ○ᶠ a
+  Stutterᶠ : {A : Set ℓ} → ∀{m} → A ʷ∥ (suc m) → (Set ℓ) ʷ∥ m
+  Stutterᶠ {_} {m} a = (a ᵖᶠ∥ m) {n≤1+n m} ≡ᶠ ○ᶠ a
 
 module St {ℓ} {A : Set ℓ} {dec : ∀ (x y : A) → Dec (x P.≡ y)} where
 
@@ -177,9 +181,9 @@ module St {ℓ} {A : Set ℓ} {dec : ∀ (x y : A) → Dec (x P.≡ y)} where
 
 
   _≃ᶠ_ : ∀{m n} → (a : A ʷ∥ (suc m)) → (b : A ʷ∥ (suc n)) → Set ℓ
-  _≃ᶠ_ a b = Σ (suc (proj₁ na) P.≡ suc (proj₁ nb)) λ eq → [ (proj₂ na ≤ᶠ proj₂ nb) (≤-reflexive eq) ]∥  where
-    na = ♮ᶠ a
-    nb = ♮ᶠ b
+  _≃ᶠ_ a b = na ≅ᶠ nb where
+    na = proj₂ (♮ᶠ a)
+    nb = proj₂ (♮ᶠ b)
 
   _≃_ : (a b : A ʷ) → Set ℓ
   a ≃ b = ∀ (m : ℕ) → ∃ λ n →
