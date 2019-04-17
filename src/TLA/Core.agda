@@ -2,7 +2,7 @@ module TLA.Core where
 
 open import Level renaming (suc to lsuc ; zero to lzero)
 import Relation.Binary.PropositionalEquality as P
-open import Data.Fin using (Fin ; toℕ ; fromℕ ; fromℕ≤ ; inject₁ ; inject≤)
+open import Data.Fin using (Fin ; toℕ ; fromℕ ; fromℕ≤ ; inject≤)
 open import Data.Nat as N using (ℕ ; suc ; zero ; _+_ ; _<_ ; _≤_ ; s≤s ; _≟_)
 open import Data.Nat.Properties using (n≤1+n ; ≤-reflexive)
 open import Data.List using (List ; [] ; _∷_ ; tabulate ; lookup ; filter ; length)
@@ -50,11 +50,11 @@ module _ {ℓ} where
   _≡ᶠ_ : ∀{m} → {C : Set ℓ} → (a b : C ʷ∥ m) → Set ℓ ʷ∥ m
   (a ≡ᶠ b) n = a n P.≡ b n
 
-  _≤ᶠ_ : ∀{m n} → {C : Set ℓ} → (a : C ʷ∥ m) → (b : C ʷ∥ n) → m N.≤ n → Set ℓ ʷ∥ m
-  (a ≤ᶠ b) m≤n fn = a fn P.≡ b (inject≤ fn m≤n)
+  _≤ᶠ_ : ∀{m n} → {C : Set ℓ} → (a : C ʷ∥ m) → (b : C ʷ∥ n) → Set ℓ
+  (a ≤ᶠ b) = ∃ λ m≤n → (fn : Fin _) → a fn P.≡ b (inject≤ fn m≤n)
 
   _≅ᶠ_ : ∀{m n} → {C : Set ℓ} → (a : C ʷ∥ m) → (b : C ʷ∥ n) → Set ℓ
-  _≅ᶠ_ {m} {n} a b = Σ (m P.≡ n) λ eq → [ (a ≤ᶠ b) (≤-reflexive eq) ]∥
+  _≅ᶠ_ {m} {n} a b = (m P.≡ n) × (a ≤ᶠ b)
 
 
   infix 30 _ᵖ∥_
@@ -187,7 +187,7 @@ module St {ℓ} {A : Set ℓ} {dec : ∀ (x y : A) → Dec (x P.≡ y)} where
 
   _≃_ : (a b : A ʷ) → Set ℓ
   a ≃ b = ∀ (m : ℕ) → ∃ λ n →
-                      ∃ λ k → m N.≤ (suc n) × ((a ᵖ∥ (suc n)) ≃ᶠ (a ᵖ∥ (suc k)))
+                      ∃ λ k → m N.≤ n × (m N.≤ k) × ((a ᵖ∥ (suc n)) ≃ᶠ (b ᵖ∥ (suc k)))
     
 
 -- We cannot construct it , thus we define its type.
